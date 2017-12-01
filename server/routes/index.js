@@ -2,20 +2,12 @@ var express = require('express');
 var router = express.Router();
 var mysql = require('mysql');
 var connection = mysql.createConnection({
-  host: 'cis550.ct0tijtcbfhx.us-east-1.rds.amazonaws.com',
-  user: 'team12',
-  password: 'cis550-team12',
-  port: '3306',
-  database: 'cis550'
+  host: process.env.AWS_MYSQL_HOSTNAME,
+  user: process.env.AWS_MYSQL_USERNAME,
+  password: process.env.AWS_MYSQL_PASSWORD,
+  port: process.env.AWS_MYSQL_PORT,
+  database: process.env.AWS_MYSQL_DATABASE
 });
-
-// var connection = mysql.createConnection({
-//   host: 'cis550hw1.ctlq74kqmuns.us-east-1.rds.amazonaws.com',
-//   port: 1521,
-//   user: 'student',
-//   password: 'cis550hw1',
-//   database: 'ORCL'
-// });
 
 connection.connect(function(err) {
   if (!err) {
@@ -31,14 +23,13 @@ router.get('/', function(req, res, next) {
 });
 
 router.get('/test', function(req, res, next) {
-  var mysql = require('mysql');
-  var connection = mysql.createConnection({
-    host: 'cis550.ct0tijtcbfhx.us-east-1.rds.amazonaws.com',
-    port: '3306',
-    user: 'team12',
-    password: 'cis550-team12',
-    database: 'cis550'
-  });
+  connection.query('select * from rent limit 10', function(err, results, fields) {
+    if (err) {
+      console.log('error: ', err);
+    } else {
+      console.log('sucessss', results);
+    }
+  })
   res.json([{
     id: 1,
     username: "testing"
