@@ -1,24 +1,18 @@
 import React, { Component } from 'react';
+import Home from './Components/Home';
+import axios from 'axios';
+import Login from './Components/Login'
+import { Link, Route, Switch } from 'react-router-dom'
 
 class App extends Component {
-  constructor() {
-    super();
-    this.state = {
-      users: []
-    }
-  }
-  componentDidMount() {
-    fetch('/test')
-      .then(res => res.json())
-      .then(users => {this.setState({ users }); console.log("state: ", this.state)})
-      .catch(err => console.log('error: ', err));
-  }
   render() {
     return (
-      <div className="container">
-        <h1>Should I Live Here?</h1>
-        {this.state.users.map(user => <p>{user.username}</p>)}
-        <input className="location-input" placeholder="where...?"/>
+      <div>
+        <Switch>
+          <Route exact path="/" component={Login}/>
+          <Route exact path="/home" component={Home}/>
+          <Route exact path="/auth/facebook/callback" component={Home}/>
+        </Switch>
       </div>
     );
   }

@@ -1,20 +1,16 @@
 var express = require('express');
-var router = express.Router();
+//var router = express.Router();
 
 /* GET users listing. */
-router.get('/', function(req, res, next) {
 
-	// Comment out this line:
-  //res.send('respond with a resource');
+module.exports = function(app, passport) {
+  app.get('/login/facebook',
+    passport.authenticate('facebook')
+  );
 
-  // And insert something like this instead:
-  res.json([{
-  	id: 1,
-  	username: "samsepi0l"
-  }, {
-  	id: 2,
-  	username: "D0loresH4ze"
-  }]);
-});
-
-module.exports = router;
+  app.get('/auth/facebook/callback',
+    passport.authenticate('facebook', { failureRedirect: '/login', successRedirect: '/home' }),
+    function(req, res) {
+      res.send(200);
+    });
+};

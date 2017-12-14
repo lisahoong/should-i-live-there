@@ -4,14 +4,12 @@ body {
   font-family: sans-serif;
 }
 
-.container {
-  display: flex;
-  align-items: center;
-  flex-direction: column;
-  width: 100%;
+#map {
+ height: 400px;
+ width: 100%;
 }
 
-.location-input {
-  padding: 10px;
-  width: 400px;
+.bottom-img {
+  width: 100vh;
+  height: auto;
 }
