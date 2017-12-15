@@ -13,3 +13,26 @@ body {
   width: 100vh;
   height: auto;
 }
+
+.border-box {
+  border: 1px solid black;
+  border-radius: 5px;
+  padding: 10px 10px;
+  height: 500px;
+  overflow: scroll;
+}
+
+.web-name {
+  font-weight: bold;
+  color: #081DA4;
+}
+
+.web-addr {
+  text-decoration: underline;
+  font-size: 12px;
+}
+
+.web-snippet {
+  text-decoration: italic;
+  font-size: 12px;
+}

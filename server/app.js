@@ -6,6 +6,9 @@ var passport = require('passport');
 var hbs = require('express-handlebars');
 var Strategy = require('passport-facebook').Strategy;
 var gps = require('gps2zip');
+var zipcode = require('zipcodes');
+var https = require('https');
+var axios = require('axios');
 var mysql = require('mysql');
 var connection = mysql.createConnection({
   host: process.env.AWS_MYSQL_HOSTNAME,
@@ -76,17 +79,133 @@ app.get('/', function(req, res, next) {
 // })
 
 app.get('/login/facebook',
-  passport.authenticate('facebook')
+passport.authenticate('facebook')
 );
 
 app.get('/auth/facebook/callback',
-    passport.authenticate('facebook', {
-        successRedirect : '/home',
-        failureRedirect : '/'
-    }));
+passport.authenticate('facebook', {
+  successRedirect : '/home',
+  failureRedirect : '/'
+})
+);
+
+app.post('/find', function(req, res) {
+  var a = new Promise(function(resolve, reject) {
+    connection.query(`SELECT zip_311 as zip, rent as Rent, complaint_count as Noise, Disrepair, Crime
+      FROM serviceRequests INNER JOIN  (SELECT zip_311 as zip, complaint_count as Disrepair, Crime, bedrooms, rent
+	    FROM serviceRequests INNER JOIN (SELECT zip_crime, crime_count as Crime, bedrooms, rent
+		  FROM policeComplaints INNER JOIN (SELECT zip, bedrooms, rent
+			FROM rent) as rent ON rent.zip = policeComplaints.zip_crime) as crime ON crime.zip_crime = serviceRequests.zip_311
+	    WHERE complaint_type='AirQuality' OR complaint_type='NeighborhoodDisrepair') as noise ON noise.zip = serviceRequests.zip_311
+      WHERE complaint_type='Noise' AND Bedrooms=${req.body.bed}
+      ORDER BY ${req.body.priority}
+      LIMIT 3;`,
+      function(err, results) {
+        if (err) {
+          console.log('error: ', err);
+          return reject(err);
+        } else {
+          return resolve({name: 'ranks', results: results});
+        }
+      })
+    });
+
+    var b = new Promise(function(resolve, reject) {
+      connection.query(`SELECT  AVG(complaint_count) as Average_Noise, AVG(Disrepair) as Average_Disrepair, AVG(Crime) as Average_Crime, AVG(rent) as Average_Rent
+           FROM serviceRequests INNER JOIN  (SELECT zip_311 as zip, complaint_count as Disrepair, Crime, bedrooms, rent
+	         FROM serviceRequests INNER JOIN (SELECT zip_crime, crime_count as Crime, bedrooms, rent
+		       FROM policeComplaints INNER JOIN (SELECT zip, bedrooms, rent
+			     FROM rent) as rent ON rent.zip = policeComplaints.zip_crime) as crime ON crime.zip_crime = serviceRequests.zip_311
+	         WHERE complaint_type='AirQuality' OR complaint_type='NeighborhoodDisrepair') as noise ON noise.zip = serviceRequests.zip_311
+           WHERE complaint_type='Noise' AND Bedrooms=${req.body.bed}`,
+        function(err, results) {
+          if (err) {
+            console.log('error: ', err);
+            return reject(err);
+          } else {
+            return resolve({name: 'avg', results: results});
+          }
+        })
+      });
+
+    Promise.all([a, b])
+    .then(function(resp) {
+      var data = {};
+      resp.forEach(function(x) {
+        data[x.name] = x.results
+      })
+      var avgs = [];
+      Object.keys(data.avg[0]).forEach(function(d) {
+        avgs.push({
+          name: d,
+          value: data.avg[0][d]
+        })
+      })
+      data.avg = avgs;
+      res.json(data)
+    })
+    .catch(function(err) {
+      console.log('error: ', err);
+      res.sendStatus(500);
+    })
+})
+
+app.post('/bing', function(req, res) {
+  console.log(req.body);
+  var subscriptionKey = process.env.BING_KEY;
+
+  var host = 'api.cognitive.microsoft.com';
+  var path = '/bing/v7.0/search';
+
+  var term = 'Microsoft Cognitive Services';
+
+  var response_handler = function (response) {
+    var body = '';
+    response.on('data', function (d) {
+      body += d;
+    });
+    response.on('end', function () {
+      console.log('\nRelevant Headers:\n');
+      for (var header in response.headers)
+      // header keys are lower-cased by Node.js
+      if (header.startsWith("bingapis-") || header.startsWith("x-msedge-"))
+      console.log(header + ": " + response.headers[header]);
+      body = JSON.stringify(JSON.parse(body), null, '  ');
+      console.log('\nJSON Response:\n');
+      console.log(JSON.parse(body).webPages.value);
+      res.json(JSON.parse(body).webPages.value);
+    });
+    response.on('error', function (e) {
+      console.log('Error: ' + e.message);
+      res.sendStatus(500);
+    });
+  };
+
+  var bing_web_search = function (search) {
+    console.log('Searching the Web for: ' + term);
+    let request_params = {
+      method : 'GET',
+      hostname : host,
+      path : path + '?q=' + encodeURIComponent(search),
+      headers : {
+        'Ocp-Apim-Subscription-Key' : subscriptionKey,
+      }
+    };
+
+    let req = https.request(request_params, response_handler);
+    req.end();
+  }
+
+  if (subscriptionKey.length === 32) {
+    bing_web_search(req.body.query);
+  } else {
+    console.log('Invalid Bing Search API subscription key!');
+    console.log('Please paste yours into the source code.');
+  }
+
+});
 
 app.post('/check', function(req, res) {
-  console.log('user', req.user);
 
   var a = new Promise(function(resolve, reject) {
     connection.query(`SELECT rent
@@ -129,7 +248,7 @@ app.post('/check', function(req, res) {
           })
         })
 
-      var d = new Promise(function(resolve, reject) {
+        var d = new Promise(function(resolve, reject) {
           connection.query(`SELECT complaint_type, complaint_count
             FROM serviceRequests
             WHERE zip_311=${req.body.zip} AND
@@ -225,17 +344,9 @@ app.post('/check', function(req, res) {
                 })
                 //console.log(stationZip);
                 data.stations = stationZip;
-                // data.stations = data.stations.slice(0, 5).map(function(s) {
-                //
-                  // return {
-                  //   name: s.NAME.S,
-                  //   line: s.LINE.S,
-                  //   position: {
-                  //     lat: parseFloat(s.transportation_lat.N),
-                  //     lon: parseFloat(s.transportation_lon.N)
-                  //   }
-                  // }
-                // });
+                data.endTime = new Date().getTime();
+                var starting = zipcode.lookup(parseFloat(req.body.zip));
+                data.startingPos = {lat: starting.latitude, lng: starting.longitude};
                 res.json(data);
               })
               .catch(err => {
@@ -255,7 +366,6 @@ app.post('/check', function(req, res) {
               // })
             })
 
-
             app.get('/*', function(req, res) {
               res.send(200);
             })
@@ -269,13 +379,14 @@ app.post('/check', function(req, res) {
 
             // error handler
             app.use(function(err, req, res, next) {
+              console.log(err);
               // set locals, only providing error in development
               res.locals.message = err.message;
               res.locals.error = req.app.get('env') === 'development' ? err : {};
 
               // render the error page
               res.status(err.status || 500);
-              res.render('error');
+              res.send(500);
             });
 
             module.exports = app;
